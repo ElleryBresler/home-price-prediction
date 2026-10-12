@@ -1,0 +1,15 @@
+# Python virtual environment
+.venv/
+
+# Environment variables and secrets
+.env
+
+# Raw downloaded data
+data/raw/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Local editor settings
+.vscode/
