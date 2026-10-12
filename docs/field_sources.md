@@ -1,4 +1,3 @@
-
 # Field Sources Data Dictionary
 
 This document identifies the source, derivation, and purpose of every field in `sql/schema.sql`.
@@ -17,15 +16,15 @@ This document identifies the source, derivation, and purpose of every field in `
 | dim_location | location_id | Created by PostgreSQL | Automatically generated identity value | Primary key; identifies a location record |
 | dim_location | neighborhood | Ames Housing Dataset | Original `Neighborhood` column | Model feature and geographic reporting |
 | dim_location | city | Created from project scope | Constant value: Ames | Dashboard context |
-| dim_location | county | Created from project scope | Constant value: Story County; verify geographic metadata | Geographic context |
+| dim_location | county | Created from project scope | Constant value: Story County, Iowa | Geographic context |
 | dim_location | state | Created from project scope | Constant value: Iowa | Geographic context |
-| dim_location | median_household_income | U.S. Census Bureau API | Census income measure; geographic match and field definition must be verified | Potential model feature |
-| dim_location | population | U.S. Census Bureau API | Census population measure; geographic match must be verified | Potential model feature |
-| dim_location | education_level | U.S. Census Bureau API | Education measure; definition and geographic match must be verified | Potential model feature |
-| dim_date | date_id | Calculated in Python | Year multiplied by 100 plus month, e.g. 200802 | Primary key; links sales and economic observations to a month |
+| dim_location | median_household_income | U.S. Census Bureau API | ACS variable `B19013_001E`; median household income for Ames, Iowa | Potential model feature; city-level value, not neighborhood-specific |
+| dim_location | population | U.S. Census Bureau API | ACS variable `B01003_001E`; total population for Ames, Iowa | Potential model feature; city-level value, not neighborhood-specific |
+| dim_location | bachelors_degree_count | U.S. Census Bureau API | ACS variable `B15003_022E`; count of people whose highest educational attainment is a bachelor's degree | Potential model feature; city-level value, not neighborhood-specific |
+| dim_date | date_id | Calculated from sale date | Year multiplied by 100 plus month, e.g., 200802 | Primary key; links sales and economic observations to a month |
 | dim_date | sale_year | Ames Housing Dataset | Original `YrSold` column | Model feature and time-based reporting |
 | dim_date | sale_month | Ames Housing Dataset | Original `MoSold` column | Model feature and time-based reporting |
-| dim_date | sale_quarter | Calculated in Python | Ceiling of sale month divided by 3 | Model feature and seasonal reporting |
+| dim_date | sale_quarter | Calculated from sale month | Ceiling of sale month divided by 3 | Model feature and seasonal reporting |
 
 ## Fact Tables
 
@@ -33,25 +32,26 @@ This document identifies the source, derivation, and purpose of every field in `
 |---|---|---|---|---|
 | fact_economic_conditions | economic_id | Created by PostgreSQL | Automatically generated identity value | Primary key |
 | fact_economic_conditions | date_id | Joined to dim_date | Matches the economic observation's month to `dim_date.date_id` | Foreign key; aligns economic data with sales periods |
-| fact_economic_conditions | mortgage_rate | FRED API | Mortgage-rate series; exact series and frequency to be selected | Potential model feature |
-| fact_economic_conditions | inflation_rate | FRED API | Inflation series; exact series and frequency to be selected | Potential model feature |
-| fact_economic_conditions | unemployment_rate | FRED API | Unemployment series; exact series and frequency to be selected | Potential model feature |
+| fact_economic_conditions | mortgage_rate | FRED API | Series `MORTGAGE30US`; 30-year fixed-rate mortgage observations beginning January 2006 | Potential model feature; observations must be aligned with sales periods |
+| fact_economic_conditions | inflation_rate | Planned additional FRED source | Exact series and frequency have not yet been selected or extracted | Potential future model feature |
+| fact_economic_conditions | unemployment_rate | Planned additional FRED source | Exact series and frequency have not yet been selected or extracted | Potential future model feature |
 | fact_home_sale | sale_id | Ames Housing Dataset | Original `Id` column | Primary key; identifies each sale record |
 | fact_home_sale | property_id | Ames Housing Dataset | Original `Id` column, linked to `dim_property.property_id` | Foreign key |
-| fact_home_sale | location_id | Ames Housing Dataset / joined | Neighborhood matched to `dim_location` | Foreign key; supports geographic features and reporting |
-| fact_home_sale | date_id | Ames Housing Dataset / calculated in Python | `YrSold` and `MoSold` converted to a year-month key | Foreign key; links the sale to its time period |
+| fact_home_sale | location_id | Ames Housing Dataset and database relationship | Neighborhood matched to `dim_location` | Foreign key; supports geographic features and reporting |
+| fact_home_sale | date_id | Ames Housing Dataset and calculation | `YrSold` and `MoSold` converted to a year-month key | Foreign key; links the sale to its time period |
 | fact_home_sale | sale_price | Ames Housing Dataset | Original `SalePrice` column | Target variable for the predictive model |
 
 ## Source Fields Used but Not Stored
 
-- Ames Housing Dataset: `Id`, `Neighborhood`, `YrSold`, `MoSold`, `OverallQual`, `GrLivArea`, `BedroomAbvGr`, `FullBath`, `YearBuilt`, `GarageCars`, and `SalePrice` are mapped to fields in the schema.
+- **Ames Housing Dataset:** `Id`, `Neighborhood`, `YrSold`, `MoSold`, `OverallQual`, `GrLivArea`, `BedroomAbvGr`, `FullBath`, `YearBuilt`, `GarageCars`, and `SalePrice` are mapped to fields in the schema.
 - Additional Ames fields are retained in the original local `train.csv` but are not currently included in the database schema.
-- Census API: geographic identifiers and any source fields used to select the appropriate geographic records must be documented after the Census geography is selected.
-- FRED API: observation dates, series identifiers, and source metadata must be documented when the specific series are selected.
+- **Census API:** The extraction script retrieves `NAME`, `B19013_001E`, `B01003_001E`, and `B15003_022E`, along with geographic identifiers. The demographic values currently represent Ames, Iowa, as a whole, not individual neighborhoods.
+- **FRED API:** The current extraction script retrieves observations for the `MORTGAGE30US` series. Observation dates and source metadata are retained in the raw JSON response. Inflation and unemployment series have not yet been extracted.
 
 ## Outstanding Validation
 
-1. Confirm the Census geographic level and establish whether it can be matched reliably to Ames neighborhoods.
-2. Select the exact FRED series, observation frequencies, and date alignment rules.
-3. Confirm how missing Census or economic observations will be handled during next week's transformation stage.
-4. Ensure that the final schema and this dictionary remain synchronized.
+1. Census demographic measures currently represent Ames, Iowa, as a whole and cannot be interpreted as neighborhood-specific values. This limitation must be considered when building the model's feature table.
+2. Mortgage-rate observations must be aligned appropriately with the home-sale months. Additional economic series may be added if needed.
+3. Missing Census or economic observations must be evaluated and handled during the transformation stage.
+4. The database schema and this data dictionary must remain synchronized as the project develops.
+5. The project will require a joined machine-learning feature table before modeling. This will be developed in a later project stage.

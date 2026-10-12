@@ -26,7 +26,7 @@ CREATE TABLE dim_location (
     state TEXT NOT NULL DEFAULT 'Iowa',
     median_household_income NUMERIC(12,2),
     population INTEGER,
-    education_level TEXT
+    bachelors_degree_count INTEGER
 );
 
 -- One row per year and month represented in the project.
