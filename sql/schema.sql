@@ -19,7 +19,7 @@ CREATE TABLE dim_property (
 
 -- One row per geographic area represented in the project.
 CREATE TABLE dim_location (
-    location_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    location_id INTEGER PRIMARY KEY,
     neighborhood TEXT NOT NULL UNIQUE,
     city TEXT NOT NULL DEFAULT 'Ames',
     county TEXT NOT NULL DEFAULT 'Story',
@@ -39,13 +39,12 @@ CREATE TABLE dim_date (
     UNIQUE (sale_year, sale_month)
 );
 
+
 -- One row per month of economic observations.
 CREATE TABLE fact_economic_conditions (
     economic_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     date_id INTEGER NOT NULL REFERENCES dim_date(date_id),
     mortgage_rate NUMERIC(6,3),
-    inflation_rate NUMERIC(6,3),
-    unemployment_rate NUMERIC(6,3),
     UNIQUE (date_id)
 );
 

@@ -16,3 +16,6 @@ __pycache__/
 
 # Kaggle competition data — do not redistribute
 data/manual/
+
+# Generated clean data
+data/clean/
