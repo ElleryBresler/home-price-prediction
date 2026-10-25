@@ -1,14 +1,17 @@
 
 # --------------------------------------
 # File: build_features.py
-# Purpose: Build the machine-learning feature table
+# Purpose: Build and load the machine-learning feature table
 # --------------------------------------
 
 import os
+import re
 from pathlib import Path
 
 import pandas as pd
 import psycopg2
+from psycopg2 import sql
+from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 
@@ -16,14 +19,19 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_DIR / ".env")
 
 
-def main():
-    connection = psycopg2.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        dbname=os.getenv("DB_NAME", "home_price_prediction"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD"),
+def connect_db():
+    """Connect using the project's existing DB_ or PG_ environment variables."""
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST") or os.getenv("PGHOST", "localhost"),
+        port=os.getenv("DB_PORT") or os.getenv("PGPORT", "5432"),
+        dbname=os.getenv("DB_NAME") or os.getenv("PGDATABASE", "home_price_prediction"),
+        user=os.getenv("DB_USER") or os.getenv("PGUSER", "postgres"),
+        password=os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD"),
     )
+
+
+def main():
+    connection = connect_db()
 
     try:
         query = """
@@ -58,15 +66,110 @@ def main():
 
         features = pd.read_sql_query(query, connection)
 
+        # Preserve the original CSV used by the existing modeling scripts.
         output_path = PROJECT_DIR / "data" / "clean" / "ml_features.csv"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         features.to_csv(output_path, index=False)
 
-        print(f"Feature table saved to: {output_path}")
-        print(f"Rows: {len(features)}")
-        print(f"Columns: {len(features.columns)}")
-        print("\nFeature table preview:")
-        print(features.head())
+        # Assign the same time-based splits used by the modeling workflow.
+        features["split"] = "train"
+        features.loc[features["sale_year"] == 2009, "split"] = "validate"
+        features.loc[features["sale_year"] == 2010, "split"] = "test"
 
+        # One-hot encode neighborhood so the database table contains
+        # model-ready categorical features.
+        encoded = pd.get_dummies(
+            features,
+            columns=["neighborhood"],
+            prefix="neighborhood",
+            dtype=int,
+        )
+
+        # Create safe, consistent SQL column names for neighborhood fields.
+        rename_columns = {}
+        for column in encoded.columns:
+            if column.startswith("neighborhood_"):
+                suffix = column[len("neighborhood_"):]
+                suffix = re.sub(r"[^a-zA-Z0-9_]", "_", suffix.lower())
+                rename_columns[column] = f"neighborhood_{suffix}"
+
+        encoded = encoded.rename(columns=rename_columns)
+
+        # PostgreSQL table columns and types.
+        column_types = {
+            "sale_id": "INTEGER PRIMARY KEY",
+            "overall_qual": "INTEGER",
+            "gr_liv_area": "INTEGER",
+            "bedroom_abvgr": "INTEGER",
+            "full_bath": "INTEGER",
+            "year_built": "INTEGER",
+            "garage_cars": "NUMERIC(4,1)",
+            "median_household_income": "NUMERIC(12,2)",
+            "population": "INTEGER",
+            "bachelors_degree_count": "INTEGER",
+            "sale_year": "INTEGER",
+            "sale_month": "INTEGER",
+            "sale_quarter": "INTEGER",
+            "mortgage_rate": "NUMERIC(6,3)",
+            "sale_price": "NUMERIC(12,2) NOT NULL",
+            "split": "TEXT NOT NULL CHECK (split IN ('train', 'validate', 'test'))",
+        }
+
+        for column in encoded.columns:
+            if column.startswith("neighborhood_"):
+                column_types[column] = "INTEGER NOT NULL DEFAULT 0"
+
+        columns = list(encoded.columns)
+
+        # Replace only the ML feature table, not the existing star schema
+        # or model-results tables.
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                DROP TABLE IF EXISTS ml_feature_table;
+            """)
+
+            definitions = []
+            for column in columns:
+                if column not in column_types:
+                    raise ValueError(f"Unexpected feature column: {column}")
+                definitions.append(
+                    sql.SQL("{} {}").format(
+                        sql.Identifier(column),
+                        sql.SQL(column_types[column]),
+                    )
+                )
+
+            create_query = sql.SQL(
+                "CREATE TABLE ml_feature_table ({})"
+            ).format(sql.SQL(", ").join(definitions))
+
+            cursor.execute(create_query)
+
+            insert_query = sql.SQL(
+                "INSERT INTO ml_feature_table ({}) VALUES %s"
+            ).format(
+                sql.SQL(", ").join(sql.Identifier(c) for c in columns)
+            )
+
+            rows = [
+                tuple(None if pd.isna(value) else value for value in row)
+                for row in encoded.itertuples(index=False, name=None)
+            ]
+
+            execute_values(cursor, insert_query.as_string(connection), rows)
+
+        connection.commit()
+
+        print(f"Original modeling CSV saved: {output_path}")
+        print(f"Original feature rows: {len(features)}")
+        print(f"PostgreSQL ML feature rows: {len(encoded)}")
+        print(f"Encoded feature columns: {len(encoded.columns)}")
+        print("\nRows by split:")
+        print(encoded["split"].value_counts().sort_index())
+
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 

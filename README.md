@@ -1,285 +1,145 @@
-# Residential Home Sale Price Prediction
+## How to Run
 
-## Business Question
+Follow these steps to set up the project on a new computer and run the complete home price prediction pipeline.
 
-What is the expected residential home sale price based on property characteristics, location, and economic conditions?
+### Prerequisites
 
-## Target Variable
+Before starting, make sure you have:
 
-Sale price (`SalePrice` in the original Ames Housing dataset; stored as `sale_price` in the project database and modeling files).
+- Python installed.
+- PostgreSQL installed and running.
+- Access to the [Ames Housing dataset on Kaggle](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data).
+- A FRED API key.
+- Git installed.
 
-## Prediction Unit
+### Step 1: Clone the Repository
 
-One row in the machine-learning feature table represents one residential home sale.
+```powershell
+git clone https://github.com/ElleryBresler/home-price-prediction.git
+cd home-price-prediction
+```
 
-## Project Overview
+### Step 2: Obtain the Ames Housing Dataset
 
-This project combines residential property characteristics, demographic and socioeconomic information, and historical mortgage rates to predict home sale prices in Ames, Iowa.
-
-The project includes data extraction, transformation, PostgreSQL storage, automated data quality checks, feature engineering, model training, and evaluation. Two regression models are compared: Linear Regression as the baseline and Random Forest as the improved model.
-
-## Data Sources
-
-This project uses three data sources:
-
-1. **Ames Housing Dataset (Kaggle):** Provides residential property characteristics and historical sale prices.
-2. **U.S. Census Bureau API:** Provides demographic and socioeconomic data for Ames, Iowa.
-3. **Federal Reserve Economic Data (FRED) API:** Provides historical 30-year fixed mortgage rates.
-
-### 1. Ames Housing Dataset
-
-The Ames Housing dataset was obtained from the [House Prices: Advanced Regression Techniques competition on Kaggle](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data).
-
-To obtain the dataset:
-
-1. Sign in to Kaggle and download the competition data.
-2. Extract the downloaded files.
-3. Place `train.csv` in the `data/manual/` directory.
-
-Expected file path:
+Download the House Prices: Advanced Regression Techniques competition data from Kaggle. Extract the downloaded files and place `train.csv` in:
 
 ```text
 data/manual/train.csv
 ```
 
-The dataset contains 1,460 residential property records and 81 columns. The original `SalePrice` field is the target variable.
+The dataset is excluded from version control and must be obtained separately.
 
-The downloaded dataset is excluded from version control through `.gitignore`. Anyone cloning this repository must obtain the dataset separately before running the pipeline.
-
-To validate the downloaded file, run:
+Validate the downloaded file:
 
 ```powershell
 python etl/check_ames_data.py
 ```
 
-### 2. U.S. Census Bureau API
+The validation script checks that the file exists and contains the columns required by the project.
 
-The Census Bureau API provides demographic and socioeconomic information for Ames, Iowa, using selected American Community Survey five-year estimates.
+### Step 3: Create and Activate a Python Virtual Environment
 
-Extraction script:
-
-```text
-etl/extract_census.py
-```
-
-Run independently with:
+From the project root, create a virtual environment:
 
 ```powershell
-python etl/extract_census.py
+python -m venv .venv
 ```
 
-The raw API response is saved to:
-
-```text
-data/raw/census_ames_raw.json
-```
-
-### 3. Federal Reserve Economic Data (FRED) API
-
-The FRED API provides historical 30-year fixed mortgage rates using the `MORTGAGE30US` series.
-
-Extraction script:
-
-```text
-etl/extract_fred.py
-```
-
-A valid FRED API key must be stored in a local `.env` file using the variable name `FRED_API_KEY`.
-
-Run independently with:
+Activate it in PowerShell:
 
 ```powershell
-python etl/extract_fred.py
+.\.venv\Scripts\Activate.ps1
 ```
 
-The raw API response is saved to:
+Install the project dependencies:
+
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Step 4: Configure Environment Variables
+
+Create a local `.env` file by copying the provided template:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Open `.env` and replace the placeholder values with your local PostgreSQL credentials and FRED API key.
+
+The configuration includes:
 
 ```text
-data/raw/fred_mortgage_raw.json
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=home_price_prediction
+DB_USER=postgres
+DB_PASSWORD=your_local_password
+FRED_API_KEY=your_fred_api_key
 ```
 
-Mortgage rates are incorporated into the project as an economic feature. Inflation and unemployment are not included in the current model.
+Use your actual local credentials. Do not commit `.env` to GitHub or share credentials publicly.
 
-## Database Design
+### Step 5: Create the PostgreSQL Database
 
-PostgreSQL stores the analytical data using a star-schema design.
+Using pgAdmin or another PostgreSQL administration tool, create an empty database named `home_price_prediction`, matching the `DB_NAME` setting in `.env`.
 
-The core database tables are defined in `sql/schema.sql`:
+The database must exist before the schema can be initialized. The initialization script creates the project tables but does not create the PostgreSQL database itself.
 
-- `dim_date`
-- `dim_location`
-- `dim_property`
-- `fact_economic_conditions`
-- `fact_home_sale`
+### Step 6: Initialize the Database Schema
 
-The machine-learning feature dataset joins property, location, sale date, sale price, and mortgage-rate information into one row per home sale.
-
-Model results are stored in two additional tables defined in `sql/model_results.sql`:
-
-- `model_evaluation_metrics`: Stores model evaluation metrics, including MAE, RMSE, and R².
-- `home_price_predictions`: Stores actual sale prices, predictions from both models, the sale identifier, and the selected model.
-
-## ETL Pipeline
-
-The Python pipeline performs the following steps:
-
-1. Extract Census API data.
-2. Extract FRED mortgage-rate data.
-3. Transform and clean the source data.
-4. Load the core tables into PostgreSQL.
-5. Run automated data quality checks.
-6. Build the machine-learning feature dataset.
-7. Check the feature dataset.
-8. Prepare chronological training, validation, and test datasets.
-9. Train the baseline and Random Forest models.
-10. Create the model-results tables if they do not exist.
-11. Evaluate both models on the final test set and save metrics and predictions to PostgreSQL.
-
-The feature dataset contains 1,460 home sales and 16 columns before categorical encoding.
-
-The chronological split is:
-
-| Dataset | Sale years | Records |
-|---|---|---:|
-| Training | 2006–2008 | 947 |
-| Validation | 2009 | 338 |
-| Final test | 2010 | 175 |
-
-The final test set is kept separate from model training and is used to compare final model performance.
-
-## Data Quality
-
-The pipeline includes eight automated data quality checks covering:
-
-- Expected row counts for core tables.
-- Missing or invalid sale prices.
-- Duplicate property identifiers.
-- Duplicate location keys or names.
-- Orphaned foreign-key relationships.
-- Missing mortgage rates.
-
-The checks run through:
+With the virtual environment activated and `.env` configured, run:
 
 ```powershell
-python etl/quality_checks.py
+python init_housing_schema.py
 ```
 
-The feature dataset is also checked for missing values and duplicate sale identifiers using:
+This script executes `sql/schema.sql` to create missing project tables. The schema uses `CREATE TABLE IF NOT EXISTS` statements and does not intentionally drop existing tables.
 
-```powershell
-python etl/check_features.py
-```
+The pipeline checks that the required core tables exist before beginning data extraction. If tables are missing, it stops and displays an error explaining that the schema must be initialized.
 
-## Modeling Approach
+### Step 7: Run the Complete Pipeline
 
-### Baseline: Linear Regression
-
-Linear Regression provides a baseline for predicting home sale prices using the prepared property, neighborhood, demographic, and economic features.
-
-### Improved Model: Random Forest
-
-Random Forest is compared with Linear Regression to evaluate whether a nonlinear model improves prediction performance.
-
-The Random Forest model uses 300 trees, a minimum leaf size of two, and a fixed random seed of 42.
-
-### Final Test Results
-
-The following results were obtained on the 2010 test set of 175 home sales.
-
-| Metric | Linear Regression | Random Forest |
-|---|---:|---:|
-| Mean Absolute Error (MAE) | $24,218.70 | $22,559.80 |
-| Root Mean Squared Error (RMSE) | $37,350.86 | $34,755.61 |
-| R² | 0.7832 | 0.8123 |
-
-Random Forest performed better on all three test metrics and was selected as the final model.
-
-Its MAE of approximately $22,560 indicates the average absolute difference between predicted and actual sale prices in the test set. Its R² of 0.8123 indicates that it explains approximately 81.2% of the variation in test-set sale prices relative to a mean-price benchmark.
-
-These results represent one chronological test period and should not be interpreted as a guarantee of performance in other years or housing markets.
-
-### Model Outputs
-
-The final evaluation generates the following files in `data/clean/`:
-
-- `final_model_metrics.csv`
-- `final_test_predictions.csv`
-
-The metrics and predictions are also written to PostgreSQL for downstream analysis and reporting.
-
-## How to Run
-
-### Prerequisites
-
-- Python installed.
-- PostgreSQL installed and running.
-- Access to the Kaggle Ames Housing dataset.
-- A FRED API key.
-- A local `.env` file containing the database settings and API credentials.
-
-### Initial Setup
-
-1. Clone the repository.
-2. Download the Kaggle dataset and place `train.csv` in `data/manual/`.
-3. Create and activate a Python virtual environment.
-4. Install the dependencies:
-
-   ```powershell
-   pip install -r requirements.txt
-   ```
-
-5. Create a local `.env` file with the database settings expected by the scripts:
-
-   ```text
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=home_price_prediction
-   DB_USER=postgres
-   DB_PASSWORD=your_local_password
-   FRED_API_KEY=your_fred_api_key
-   ```
-
-   Replace the example values with your actual local configuration. Do not commit `.env` to GitHub.
-
-6. Create the core database tables by executing `sql/schema.sql` against your PostgreSQL database.
-
-### Run the Pipeline
-
-From the project root, with the virtual environment activated, run:
+From the project root, run:
 
 ```powershell
 python run_pipeline.py
 ```
 
-The pipeline runs extraction, transformation, database loading, data quality checks, feature preparation, model training, and final evaluation in sequence. It stops if a pipeline step fails.
+The pipeline performs these operations in sequence:
 
-The core database schema must exist before the first run. The model-results tables are created automatically by the pipeline if they do not already exist.
+1. Extract demographic and socioeconomic data from the U.S. Census Bureau API.
+2. Extract historical mortgage rates from the FRED API.
+3. Transform the source data and generate dimension and fact table CSV files.
+4. Load the transformed data into PostgreSQL.
+5. Run eight automated data quality checks.
+6. Build and validate the machine-learning feature dataset.
+7. Prepare chronological training, validation, and test datasets.
+8. Train the baseline Linear Regression model.
+9. Train the Random Forest model.
+10. Create the model-results tables if they do not exist.
+11. Evaluate both models on the final test set and save metrics and predictions to PostgreSQL.
 
-### Verify Model Results
+The pipeline stops if a step fails. Review the error message before continuing.
 
-To verify that evaluation metrics and predictions were saved to PostgreSQL, run:
+### Step 8: Verify the Results
+
+After a successful run, verify the saved model results:
 
 ```powershell
 python etl/verify_model_results.py
 ```
 
-The verification script reports the most recent model evaluation records and the number of saved predictions and unique home sales.
+The pipeline generates these files in `data/clean/`:
 
-## Data Documentation
+- `final_model_metrics.csv`
+- `final_test_predictions.csv`
 
-Additional documentation is maintained in:
+These files are excluded from version control and are recreated when the pipeline runs.
 
-- `docs/field_sources.md`: Documents field sources and origins.
-- `docs/missing_data.md`: Documents missing-data handling decisions.
+### Reproducibility Notes
 
-See `docs/data_flow.png` if the data-flow diagram is included in the repository.
+Python dependencies are specified in `requirements.txt`, and `.env.example` documents the required environment variables. The `.gitignore` file excludes secrets, the virtual environment, downloaded source data, and generated data files.
 
-## Version Control and Reproducibility
-
-The project uses Git and GitHub for version control. Python dependencies are recorded in `requirements.txt`, and a virtual environment is used to isolate project dependencies.
-
-The `.gitignore` file excludes environment variables, the virtual environment, downloaded raw data, and generated clean data files.
-
-## AI Usage
-
-ChatGPT was used to help interpret assignment requirements, plan the database structure, troubleshoot code, and develop documentation. The student reviewed and tested the project code and evaluated the model outputs.
+A new user must obtain the Kaggle dataset, configure PostgreSQL and the FRED API key, create the database, and initialize the schema before running the pipeline. After these prerequisites are complete, `python run_pipeline.py` executes the complete workflow.

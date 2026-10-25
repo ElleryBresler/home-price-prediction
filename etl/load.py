@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 CLEAN_DIR = PROJECT_DIR / "data" / "clean"
 
+# Load database settings from the project's .env file.
 load_dotenv(PROJECT_DIR / ".env")
 
 
@@ -80,22 +81,62 @@ TABLES = [
 ]
 
 
+def connect_db():
+    """Connect using either DB_* or PG* variables from .env."""
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST") or os.getenv("PGHOST", "localhost"),
+        port=os.getenv("DB_PORT") or os.getenv("PGPORT", "5432"),
+        dbname=os.getenv("DB_NAME") or os.getenv(
+            "PGDATABASE", "home_price_prediction"
+        ),
+        user=os.getenv("DB_USER") or os.getenv("PGUSER", "postgres"),
+        password=os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD"),
+    )
+
+
 def main():
     connection = None
 
     try:
-        # Connect using credentials from the .env file.
-        connection = psycopg2.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
-            dbname=os.getenv("DB_NAME", "home_price_prediction"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD"),
-        )
+        connection = connect_db()
 
-        # A transaction ensures the load rolls back if something fails.
+        # A transaction rolls back the load if something fails.
         with connection:
             with connection.cursor() as cursor:
+
+                # Confirm the connection points to the expected database
+                # and that the required tables already exist.
+                cursor.execute("SELECT current_database();")
+                database_name = cursor.fetchone()[0]
+                print(f"Connected to database: {database_name}")
+
+                required_tables = [
+                    "dim_property",
+                    "dim_location",
+                    "dim_date",
+                    "fact_economic_conditions",
+                    "fact_home_sale",
+                ]
+
+                cursor.execute("""
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND table_type = 'BASE TABLE';
+                """)
+                existing_tables = {row[0] for row in cursor.fetchall()}
+
+                missing_tables = [
+                    table for table in required_tables
+                    if table not in existing_tables
+                ]
+
+                if missing_tables:
+                    raise RuntimeError(
+                        "Required tables do not exist in database "
+                        f"'{database_name}': {missing_tables}. "
+                        "Initialize the database schema before loading data."
+                    )
 
                 # Clear existing rows so rerunning the loader
                 # replaces the data instead of duplicating it.
@@ -137,7 +178,6 @@ def main():
                     df = df[columns].astype(object)
                     df = df.where(pd.notna(df), None)
 
-                    # Build an INSERT using the predefined column names.
                     column_sql = ", ".join(columns)
                     placeholders = ", ".join(
                         ["%s"] * len(columns)
