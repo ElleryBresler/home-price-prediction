@@ -24,6 +24,7 @@ def check_database_schema():
         "dim_date",
         "fact_economic_conditions",
         "fact_home_sale",
+        "ml_feature_table",
     }
 
     try:

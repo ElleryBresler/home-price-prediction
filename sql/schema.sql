@@ -67,3 +67,52 @@ CREATE TABLE IF NOT EXISTS home_price_predictions (
     random_forest_prediction NUMERIC(12,2) NOT NULL,
     model_selected TEXT NOT NULL
 );
+
+
+-- One row per home sale, with joined, encoded features ready for modeling.
+CREATE TABLE IF NOT EXISTS ml_feature_table (
+    sale_id INTEGER PRIMARY KEY,
+    overall_qual INTEGER,
+    gr_liv_area INTEGER,
+    bedroom_abvgr INTEGER,
+    full_bath INTEGER,
+    year_built INTEGER,
+    house_age_at_sale INTEGER,
+    garage_cars NUMERIC(4,1),
+    median_household_income NUMERIC(12,2),
+    population INTEGER,
+    bachelors_degree_count INTEGER,
+    sale_year INTEGER,
+    sale_month INTEGER,
+    sale_quarter INTEGER,
+    mortgage_rate NUMERIC(6,3),
+    sale_price NUMERIC(12,2) NOT NULL,
+    split TEXT NOT NULL CHECK (split IN ('train', 'validate', 'test')),
+
+    -- One-hot-encoded neighborhood features
+    neighborhood_blmngtn INTEGER NOT NULL DEFAULT 0,
+    neighborhood_blueste INTEGER NOT NULL DEFAULT 0,
+    neighborhood_brdale INTEGER NOT NULL DEFAULT 0,
+    neighborhood_brkside INTEGER NOT NULL DEFAULT 0,
+    neighborhood_clearcr INTEGER NOT NULL DEFAULT 0,
+    neighborhood_collgcr INTEGER NOT NULL DEFAULT 0,
+    neighborhood_crawfor INTEGER NOT NULL DEFAULT 0,
+    neighborhood_edwards INTEGER NOT NULL DEFAULT 0,
+    neighborhood_gilbert INTEGER NOT NULL DEFAULT 0,
+    neighborhood_idotrr INTEGER NOT NULL DEFAULT 0,
+    neighborhood_meadowv INTEGER NOT NULL DEFAULT 0,
+    neighborhood_mitchel INTEGER NOT NULL DEFAULT 0,
+    neighborhood_names INTEGER NOT NULL DEFAULT 0,
+    neighborhood_noridge INTEGER NOT NULL DEFAULT 0,
+    neighborhood_npkvill INTEGER NOT NULL DEFAULT 0,
+    neighborhood_nridght INTEGER NOT NULL DEFAULT 0,
+    neighborhood_nwames INTEGER NOT NULL DEFAULT 0,
+    neighborhood_oldtown INTEGER NOT NULL DEFAULT 0,
+    neighborhood_sawyer INTEGER NOT NULL DEFAULT 0,
+    neighborhood_sawyerw INTEGER NOT NULL DEFAULT 0,
+    neighborhood_somerst INTEGER NOT NULL DEFAULT 0,
+    neighborhood_stonebr INTEGER NOT NULL DEFAULT 0,
+    neighborhood_swisu INTEGER NOT NULL DEFAULT 0,
+    neighborhood_timber INTEGER NOT NULL DEFAULT 0,
+    neighborhood_veenker INTEGER NOT NULL DEFAULT 0
+);

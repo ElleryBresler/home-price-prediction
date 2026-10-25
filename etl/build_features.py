@@ -66,6 +66,11 @@ def main():
 
         features = pd.read_sql_query(query, connection)
 
+        # Calculate the home's age at the time of sale.
+        features["house_age_at_sale"] = (
+            features["sale_year"] - features["year_built"]
+        )
+
         # Preserve the original CSV used by the existing modeling scripts.
         output_path = PROJECT_DIR / "data" / "clean" / "ml_features.csv"
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +108,7 @@ def main():
             "bedroom_abvgr": "INTEGER",
             "full_bath": "INTEGER",
             "year_built": "INTEGER",
+            "house_age_at_sale": "INTEGER",
             "garage_cars": "NUMERIC(4,1)",
             "median_household_income": "NUMERIC(12,2)",
             "population": "INTEGER",
@@ -121,34 +127,20 @@ def main():
 
         columns = list(encoded.columns)
 
-        # Replace only the ML feature table, not the existing star schema
-        # or model-results tables.
+
+        # Refresh only the ML feature table's data.
+        # Its structure is defined in sql/schema.sql.
         with connection.cursor() as cursor:
-            cursor.execute("""
-                DROP TABLE IF EXISTS ml_feature_table;
-            """)
+            cursor.execute("DELETE FROM ml_feature_table;")
 
-            definitions = []
-            for column in columns:
-                if column not in column_types:
-                    raise ValueError(f"Unexpected feature column: {column}")
-                definitions.append(
-                    sql.SQL("{} {}").format(
-                        sql.Identifier(column),
-                        sql.SQL(column_types[column]),
-                    )
-                )
-
-            create_query = sql.SQL(
-                "CREATE TABLE ml_feature_table ({})"
-            ).format(sql.SQL(", ").join(definitions))
-
-            cursor.execute(create_query)
+            columns = list(encoded.columns)
 
             insert_query = sql.SQL(
                 "INSERT INTO ml_feature_table ({}) VALUES %s"
             ).format(
-                sql.SQL(", ").join(sql.Identifier(c) for c in columns)
+                sql.SQL(", ").join(
+                    sql.Identifier(column) for column in columns
+                )
             )
 
             rows = [
@@ -156,9 +148,14 @@ def main():
                 for row in encoded.itertuples(index=False, name=None)
             ]
 
-            execute_values(cursor, insert_query.as_string(connection), rows)
+            execute_values(
+                cursor,
+                insert_query.as_string(connection),
+                rows,
+            )
 
         connection.commit()
+
 
         print(f"Original modeling CSV saved: {output_path}")
         print(f"Original feature rows: {len(features)}")
