@@ -6,17 +6,23 @@ What is the expected residential home sale price based on property characteristi
 
 ## Target Variable
 
-Sale price (`SalePrice`).
+Sale price (`SalePrice` in the original Ames Housing dataset; stored as `sale_price` in the project database and modeling files).
 
 ## Prediction Unit
 
-One row in my ML feature table = one residential home sale.
+One row in the machine-learning feature table represents one residential home sale.
+
+## Project Overview
+
+This project combines residential property characteristics, demographic and socioeconomic information, and historical mortgage rates to predict home sale prices in Ames, Iowa.
+
+The project includes data extraction, transformation, PostgreSQL storage, automated data quality checks, feature engineering, model training, and evaluation. Two regression models are compared: Linear Regression as the baseline and Random Forest as the improved model.
 
 ## Data Sources
 
-This project combines three data sources to support residential home sale price analysis and prediction.
+This project uses three data sources:
 
-1. **Ames Housing Dataset (Kaggle):** Provides residential property characteristics and historical sale prices. The target variable is `SalePrice`.
+1. **Ames Housing Dataset (Kaggle):** Provides residential property characteristics and historical sale prices.
 2. **U.S. Census Bureau API:** Provides demographic and socioeconomic data for Ames, Iowa.
 3. **Federal Reserve Economic Data (FRED) API:** Provides historical 30-year fixed mortgage rates.
 
@@ -30,15 +36,15 @@ To obtain the dataset:
 2. Extract the downloaded files.
 3. Place `train.csv` in the `data/manual/` directory.
 
-The expected file path is:
+Expected file path:
 
 ```text
 data/manual/train.csv
 ```
 
-The dataset contains 1,460 residential property records and 81 columns. The `SalePrice` field is the target variable for the planned home price prediction model.
+The dataset contains 1,460 residential property records and 81 columns. The original `SalePrice` field is the target variable.
 
-The downloaded dataset is excluded from version control through `.gitignore`. Anyone cloning this repository must obtain the dataset separately before running the Ames data validation script.
+The downloaded dataset is excluded from version control through `.gitignore`. Anyone cloning this repository must obtain the dataset separately before running the pipeline.
 
 To validate the downloaded file, run:
 
@@ -48,15 +54,15 @@ python etl/check_ames_data.py
 
 ### 2. U.S. Census Bureau API
 
-The Census Bureau API provides demographic and socioeconomic information for Ames, Iowa. The extraction script retrieves selected American Community Survey five-year estimates.
+The Census Bureau API provides demographic and socioeconomic information for Ames, Iowa, using selected American Community Survey five-year estimates.
 
-The script is located at:
+Extraction script:
 
 ```text
 etl/extract_census.py
 ```
 
-Run the script with:
+Run independently with:
 
 ```powershell
 python etl/extract_census.py
@@ -72,7 +78,7 @@ data/raw/census_ames_raw.json
 
 The FRED API provides historical 30-year fixed mortgage rates using the `MORTGAGE30US` series.
 
-The extraction script is located at:
+Extraction script:
 
 ```text
 etl/extract_fred.py
@@ -80,7 +86,7 @@ etl/extract_fred.py
 
 A valid FRED API key must be stored in a local `.env` file using the variable name `FRED_API_KEY`.
 
-Run the script with:
+Run independently with:
 
 ```powershell
 python etl/extract_fred.py
@@ -92,11 +98,13 @@ The raw API response is saved to:
 data/raw/fred_mortgage_raw.json
 ```
 
-The current extraction script retrieves mortgage rate observations. Additional economic indicators, such as inflation and unemployment, may be incorporated in future development.
+Mortgage rates are incorporated into the project as an economic feature. Inflation and unemployment are not included in the current model.
 
-### Data Storage and Version Control
+## Database Design
 
-The project uses PostgreSQL to organize the planned analytical dataset using a star schema. The schema is defined in `sql/schema.sql` and includes the following tables:
+PostgreSQL stores the analytical data using a star-schema design.
+
+The core database tables are defined in `sql/schema.sql`:
 
 - `dim_date`
 - `dim_location`
@@ -104,17 +112,174 @@ The project uses PostgreSQL to organize the planned analytical dataset using a s
 - `fact_economic_conditions`
 - `fact_home_sale`
 
-Raw API responses, downloaded competition data, environment variables, and local development files are excluded from version control. API keys must never be committed to the repository.
+The machine-learning feature dataset joins property, location, sale date, sale price, and mortgage-rate information into one row per home sale.
+
+Model results are stored in two additional tables defined in `sql/model_results.sql`:
+
+- `model_evaluation_metrics`: Stores model evaluation metrics, including MAE, RMSE, and R².
+- `home_price_predictions`: Stores actual sale prices, predictions from both models, the sale identifier, and the selected model.
+
+## ETL Pipeline
+
+The Python pipeline performs the following steps:
+
+1. Extract Census API data.
+2. Extract FRED mortgage-rate data.
+3. Transform and clean the source data.
+4. Load the core tables into PostgreSQL.
+5. Run automated data quality checks.
+6. Build the machine-learning feature dataset.
+7. Check the feature dataset.
+8. Prepare chronological training, validation, and test datasets.
+9. Train the baseline and Random Forest models.
+10. Create the model-results tables if they do not exist.
+11. Evaluate both models on the final test set and save metrics and predictions to PostgreSQL.
+
+The feature dataset contains 1,460 home sales and 16 columns before categorical encoding.
+
+The chronological split is:
+
+| Dataset | Sale years | Records |
+|---|---|---:|
+| Training | 2006–2008 | 947 |
+| Validation | 2009 | 338 |
+| Final test | 2010 | 175 |
+
+The final test set is kept separate from model training and is used to compare final model performance.
+
+## Data Quality
+
+The pipeline includes eight automated data quality checks covering:
+
+- Expected row counts for core tables.
+- Missing or invalid sale prices.
+- Duplicate property identifiers.
+- Duplicate location keys or names.
+- Orphaned foreign-key relationships.
+- Missing mortgage rates.
+
+The checks run through:
+
+```powershell
+python etl/quality_checks.py
+```
+
+The feature dataset is also checked for missing values and duplicate sale identifiers using:
+
+```powershell
+python etl/check_features.py
+```
+
+## Modeling Approach
+
+### Baseline: Linear Regression
+
+Linear Regression provides a baseline for predicting home sale prices using the prepared property, neighborhood, demographic, and economic features.
+
+### Improved Model: Random Forest
+
+Random Forest is compared with Linear Regression to evaluate whether a nonlinear model improves prediction performance.
+
+The Random Forest model uses 300 trees, a minimum leaf size of two, and a fixed random seed of 42.
+
+### Final Test Results
+
+The following results were obtained on the 2010 test set of 175 home sales.
+
+| Metric | Linear Regression | Random Forest |
+|---|---:|---:|
+| Mean Absolute Error (MAE) | $24,218.70 | $22,559.80 |
+| Root Mean Squared Error (RMSE) | $37,350.86 | $34,755.61 |
+| R² | 0.7832 | 0.8123 |
+
+Random Forest performed better on all three test metrics and was selected as the final model.
+
+Its MAE of approximately $22,560 indicates the average absolute difference between predicted and actual sale prices in the test set. Its R² of 0.8123 indicates that it explains approximately 81.2% of the variation in test-set sale prices relative to a mean-price benchmark.
+
+These results represent one chronological test period and should not be interpreted as a guarantee of performance in other years or housing markets.
+
+### Model Outputs
+
+The final evaluation generates the following files in `data/clean/`:
+
+- `final_model_metrics.csv`
+- `final_test_predictions.csv`
+
+The metrics and predictions are also written to PostgreSQL for downstream analysis and reporting.
 
 ## How to Run
 
-1. Create and activate a Python virtual environment.
-2. Install dependencies: `pip install -r requirements.txt`
-3. Create a `.env` file with required API credentials and database settings.
-4. Run the extraction scripts in `etl/`.
-5. Run `sql/schema.sql` against PostgreSQL.
-6. Run `python db_check.py` to verify the database tables.
+### Prerequisites
+
+- Python installed.
+- PostgreSQL installed and running.
+- Access to the Kaggle Ames Housing dataset.
+- A FRED API key.
+- A local `.env` file containing the database settings and API credentials.
+
+### Initial Setup
+
+1. Clone the repository.
+2. Download the Kaggle dataset and place `train.csv` in `data/manual/`.
+3. Create and activate a Python virtual environment.
+4. Install the dependencies:
+
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+5. Create a local `.env` file with the database settings expected by the scripts:
+
+   ```text
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_NAME=home_price_prediction
+   DB_USER=postgres
+   DB_PASSWORD=your_local_password
+   FRED_API_KEY=your_fred_api_key
+   ```
+
+   Replace the example values with your actual local configuration. Do not commit `.env` to GitHub.
+
+6. Create the core database tables by executing `sql/schema.sql` against your PostgreSQL database.
+
+### Run the Pipeline
+
+From the project root, with the virtual environment activated, run:
+
+```powershell
+python run_pipeline.py
+```
+
+The pipeline runs extraction, transformation, database loading, data quality checks, feature preparation, model training, and final evaluation in sequence. It stops if a pipeline step fails.
+
+The core database schema must exist before the first run. The model-results tables are created automatically by the pipeline if they do not already exist.
+
+### Verify Model Results
+
+To verify that evaluation metrics and predictions were saved to PostgreSQL, run:
+
+```powershell
+python etl/verify_model_results.py
+```
+
+The verification script reports the most recent model evaluation records and the number of saved predictions and unique home sales.
+
+## Data Documentation
+
+Additional documentation is maintained in:
+
+- `docs/field_sources.md`: Documents field sources and origins.
+- `docs/missing_data.md`: Documents missing-data handling decisions.
+
+See `docs/data_flow.png` if the data-flow diagram is included in the repository.
+
+## Version Control and Reproducibility
+
+The project uses Git and GitHub for version control. Python dependencies are recorded in `requirements.txt`, and a virtual environment is used to isolate project dependencies.
+
+The `.gitignore` file excludes environment variables, the virtual environment, downloaded raw data, and generated clean data files.
 
 ## AI Usage
 
-ChatGPT was used to help interpret assignment requirements, plan the database structure, and develop and document code. Code and data-source choices will be reviewed and tested by the student.
+ChatGPT was used to help interpret assignment requirements, plan the database structure, troubleshoot code, and develop documentation. The student reviewed and tested the project code and evaluated the model outputs.
