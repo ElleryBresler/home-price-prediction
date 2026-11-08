@@ -58,14 +58,15 @@ CREATE TABLE IF NOT EXISTS model_evaluation_metrics (
     r_squared NUMERIC(8,5) NOT NULL
 );
 
--- Stores model predictions for each tested home sale.
+-- Stores one model prediction per home sale.
 CREATE TABLE IF NOT EXISTS home_price_predictions (
     prediction_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sale_id INTEGER NOT NULL REFERENCES fact_home_sale(sale_id),
-    actual_sale_price NUMERIC(12,2) NOT NULL,
-    linear_regression_prediction NUMERIC(12,2) NOT NULL,
-    random_forest_prediction NUMERIC(12,2) NOT NULL,
-    model_selected TEXT NOT NULL
+    split TEXT NOT NULL CHECK (split IN ('train', 'validate', 'test')),
+    actual NUMERIC(12,2) NOT NULL,
+    predicted NUMERIC(12,2) NOT NULL,
+    error NUMERIC(12,2) NOT NULL,
+    model_name TEXT NOT NULL
 );
 
 

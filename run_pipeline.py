@@ -103,14 +103,8 @@ def main():
         # 4. Prepare chronological training and test datasets.
         ("Prepare model data", "etl/prepare_model_data.py"),
 
-        # 5. Train and compare models.
-        ("Train baseline model", "etl/train_baseline.py"),
-        ("Train Random Forest model", "etl/train_random_forest.py"),
-
-        # 6. Ensure result tables exist, evaluate final models,
-        # and save metrics and predictions to PostgreSQL.
-        ("Create model results tables", "etl/create_result_tables.py"),
-        ("Evaluate models and save results", "etl/evaluate_models.py"),
+        # 5. Train, compare, evaluate, and save model predictions.
+        ("Train and evaluate predictive models", "model/train_model.py"),
     ]
 
     print("HOME PRICE PREDICTION PIPELINE", flush=True)
