@@ -116,10 +116,10 @@ The pipeline performs these operations in sequence:
 5. Run eight automated data quality checks.
 6. Build and validate the machine-learning feature dataset.
 7. Prepare chronological training, validation, and test datasets.
-8. Train the baseline Linear Regression model.
-9. Train the Random Forest model.
-10. Create the model-results tables if they do not exist.
-11. Evaluate both models on the final test set and save metrics and predictions to PostgreSQL.
+8. Explore the training data and generate three visualizations.
+9. Train a baseline model using the training-set average sale price.
+10. Train and compare Linear Regression, Random Forest, and Gradient Boosting models using validation MAE.
+11. Select the best-performing model, evaluate it on the held-out test dataset, and save predictions to PostgreSQL.
 
 The pipeline stops if a step fails. Review the error message before continuing.
 
