@@ -19,7 +19,7 @@ The exploratory visualizations in this report were generated using the training 
 
 ### 2.1 Distribution of Home Sale Prices
 
-**Figure:** `figures/sale_price_distribution.png`
+![Distribution of Home Sale Prices](figures/sale_price_distribution.png)
 
 The distribution of home sale prices is positively skewed (right-skewed). Most homes in the training data sold for approximately $100,000 to $200,000, while a smaller number sold for substantially higher prices. The long right tail includes a few observations above $500,000.
 
@@ -27,13 +27,13 @@ This pattern indicates that sale prices are not symmetrically distributed and th
 
 ### 2.2 Home Sale Price vs. Overall Quality
 
-**Figure:** `figures/price_vs_quality.png`
+![Home Sale Price vs. Overall Quality](figures/price_vs_quality.png)
 
 The scatter plot shows a positive association between overall quality and sale price. Homes with higher overall quality ratings generally sold for more than homes with lower ratings. However, there is considerable variation in sale prices within each quality rating. This suggests that overall quality is informative, but does not explain sale price on its own.
 
 ### 2.3 Home Sale Price vs. Above-Ground Living Area
 
-**Figure:** `figures/price_vs_living_area.png`
+![Home Sale Price vs. Above-Ground Living Area](figures/price_vs_living_area.png)
 
 The scatter plot shows a positive association between above-ground living area and sale price. In general, homes with more living area sold for higher prices. The relationship is not perfectly linear, and sale prices vary substantially among homes with similar living areas. A few unusually large or expensive properties are also visible.
 
