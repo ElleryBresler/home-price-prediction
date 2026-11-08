@@ -1,19 +1,26 @@
+
 # --------------------------------------
 # File: train_model.py
-# Purpose: Read ML features and prepare datasets
+# Author: Ellery Hill (Bresler)
+# Purpose: Read ML features and explore training data
+# Created: November 7th, 2026
 # --------------------------------------
-
 import os
 from pathlib import Path
 
 import pandas as pd
 import psycopg2
-from dotenv import load_dotenv  
+import matplotlib.pyplot as plt
 
-# Locate the main project directory.
+from dotenv import load_dotenv
+from sklearn.metrics import mean_absolute_error
+
+
+
+# PROJECT CONFIGURATION
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
-# Load database credentials.
 load_dotenv(PROJECT_DIR / ".env")
 
 
@@ -28,13 +35,19 @@ def connect_db():
         password=os.getenv("DB_PASSWORD"),
     )
 
+
+
+# MAIN FUNCTION
+
 def main():
 
     connection = connect_db()
 
     try:
 
-        # Read the ML feature table from PostgreSQL.
+        
+        # STEP 1: READ ML FEATURE TABLE
+
         query = """
             SELECT *
             FROM ml_feature_table
@@ -44,31 +57,140 @@ def main():
         df = pd.read_sql_query(query, connection)
 
         print("ML FEATURE TABLE")
-        print("=" * 50)
+
         print(f"Total records: {len(df)}")
-            # Separate the data using the split column.
+
+        # Separate data using the split column.
         train = df[df["split"] == "train"].copy()
-
         validate = df[df["split"] == "validate"].copy()
-
         test = df[df["split"] == "test"].copy()
 
-        # Display the number of records in each dataset.
+        # Display dataset counts.
         print("\nDATASET SPLITS")
-        print("=" * 50)
 
         print(f"Training records: {len(train)}")
         print(f"Validation records: {len(validate)}")
         print(f"Testing records: {len(test)}")
 
-        # Check that none of the datasets are empty.
+        # Check that no dataset is empty.
         if train.empty or validate.empty or test.empty:
             raise ValueError("One or more dataset splits are empty.")
 
-        print("\nAll three datasets successfully loaded.")
+       
+        # STEP 2: EXPLORE TRAINING DATA
+      
+        # Create folder for saved visualizations.
+        figures_dir = PROJECT_DIR / "docs" / "figures"
+        figures_dir.mkdir(parents=True, exist_ok=True)
+
+        # Convert chart columns to numeric values.
+        train["sale_price"] = pd.to_numeric(train["sale_price"])
+        train["overall_qual"] = pd.to_numeric(train["overall_qual"])
+        train["gr_liv_area"] = pd.to_numeric(train["gr_liv_area"])
+
+       
+        # CHART 1: SALE PRICE DISTRIBUTION
+
+        plt.figure(figsize=(10, 6))
+
+        plt.hist(
+            train["sale_price"],
+            bins=30,
+            edgecolor="black"
+        )
+
+        plt.title("Distribution of Home Sale Prices")
+        plt.xlabel("Sale Price ($)")
+        plt.ylabel("Number of Homes")
+
+        plt.tight_layout()
+
+        plt.savefig(
+            figures_dir / "sale_price_distribution.png",
+            dpi=300
+        )
+
+        plt.close()
+
+       
+
+
+        # CHART 2: PRICE VS. OVERALL QUALITY
+
+        plt.figure(figsize=(10, 6))
+
+        plt.scatter(
+            train["overall_qual"],
+            train["sale_price"],
+            alpha=0.5
+        )
+
+        plt.title("Home Sale Price vs. Overall Quality")
+        plt.xlabel("Overall Quality Rating")
+        plt.ylabel("Sale Price ($)")
+
+        plt.tight_layout()
+
+        plt.savefig(
+            figures_dir / "price_vs_quality.png",
+            dpi=300
+        )
+
+        plt.close()
+
+
+        # CHART 3: PRICE VS. LIVING AREA
+
+        plt.figure(figsize=(10, 6))
+
+        plt.scatter(
+            train["gr_liv_area"],
+            train["sale_price"],
+            alpha=0.5
+        )
+
+        plt.title("Home Sale Price vs. Above-Ground Living Area")
+        plt.xlabel("Above-Ground Living Area (Square Feet)")
+        plt.ylabel("Sale Price ($)")
+
+        plt.tight_layout()
+
+        plt.savefig(
+            figures_dir / "price_vs_living_area.png",
+            dpi=300
+        )
+
+        plt.close()
+
+
+
+        
+        # STEP 3: BASELINE MODEL
+
+        # Calculate the average sale price using training data.
+        baseline_price = train["sale_price"].mean()
+
+        # Predict the same average price for every validation home.
+        baseline_predictions = [baseline_price] * len(validate)
+
+        # Calculate Mean Absolute Error.
+        baseline_mae = mean_absolute_error(
+            validate["sale_price"],
+            baseline_predictions
+        )
+
+        # Display baseline results.
+        print("\nBASELINE MODEL RESULTS")
+
+        print(f"Average training sale price: ${baseline_price:,.2f}")
+        print(f"Baseline validation MAE: ${baseline_mae:,.2f}")
+
     finally:
         connection.close()
 
+
+
+# RUN SCRIPT
 
 if __name__ == "__main__":
     main()
