@@ -19,3 +19,5 @@ data/manual/
 
 # Generated clean data
 data/clean/
+
+.Rhistory
